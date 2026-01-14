@@ -86,7 +86,7 @@ final class LocationService: NSObject, ObservableObject {
                 manager.startUpdatingHeading()
             }
         case .notDetermined:
-            manager.requestWhenInUseAuthorization()
+            break
         default:
             break
         }

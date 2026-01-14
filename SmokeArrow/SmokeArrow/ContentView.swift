@@ -704,8 +704,6 @@ struct ContentView: View {
 
 private struct ActiveAlert: Identifiable {
     enum Kind: Equatable {
-        case permissionRequest
-        case permissionDenied
         case notFound
         case searchError
     }
