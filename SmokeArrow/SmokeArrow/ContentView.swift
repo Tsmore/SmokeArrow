@@ -200,7 +200,7 @@ struct ContentView: View {
                             .padding(.horizontal, 18)
                             .padding(.vertical, 10)
                             .background(
-                                cafeButtonGlassBackground(for: theme)
+                                GlassCapsuleBackground(usesLightText: theme.usesLightText)
                             )
                     }
                     .padding(.top, 4)
@@ -312,33 +312,36 @@ struct ContentView: View {
     @ViewBuilder
     private func topInset(foregroundColor: Color) -> some View {
         if let name = currentSpotDisplayNameForView {
-            Button {
-                guard !isScreenshotMode else { return }
-                showMapPicker = true
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label {
-                        Text(name)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    } icon: {
-                        Image(systemName: "mappin.and.ellipse")
-                    }
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(foregroundColor)
+            HStack(alignment: .top, spacing: 0) {
+                Button {
+                    guard !isScreenshotMode else { return }
+                    showMapPicker = true
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label {
+                            Text(name)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        } icon: {
+                            Image(systemName: "mappin.and.ellipse")
+                        }
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(foregroundColor)
 
-                    if let scopeMessage = searchScopeMessageForView {
-                        Text(scopeMessage)
-                            .font(.caption)
-                            .foregroundStyle(foregroundColor.opacity(0.8))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                        if let scopeMessage = searchScopeMessageForView {
+                            Text(scopeMessage)
+                                .font(.caption)
+                                .foregroundStyle(foregroundColor.opacity(0.8))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
             }
             .padding(.top, 14)
             .padding(.bottom, 6)
@@ -505,34 +508,6 @@ struct ContentView: View {
         let activeOpacity: Double = isAlternative ? 0.65 : (isFar ? 0.6 : (isHesitant ? 0.85 : 1))
 
         return ArrowAppearance(activeColor: activeColor, inactiveColor: inactiveColor, activeOpacity: activeOpacity)
-    }
-
-    @ViewBuilder
-    private func cafeButtonGlassBackground(for theme: BackgroundTheme) -> some View {
-        let borderColor = theme.usesLightText ? Color.white.opacity(0.28) : Color.black.opacity(0.10)
-        let highlightOpacity = theme.usesLightText ? 0.22 : 0.12
-        let shadowOpacity = theme.usesLightText ? 0.10 : 0.06
-
-        Capsule()
-            .fill(.ultraThinMaterial)
-            .overlay(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(highlightOpacity),
-                            Color.white.opacity(0.02),
-                            Color.white.opacity(0)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .blendMode(.softLight)
-            )
-            .overlay(
-                Capsule().strokeBorder(borderColor, lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(shadowOpacity), radius: 3, x: 0, y: 2)
     }
 
     private enum MapProvider {
