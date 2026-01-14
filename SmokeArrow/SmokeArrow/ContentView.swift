@@ -271,30 +271,24 @@ struct ContentView: View {
         }
         .onAppear {
             currentDate = Date()
-            if !isScreenshotMode {
-                viewModel.onAppear()
-                applyWindowBackground()
-            }
+            startCoreIfAllowed()
         }
         .onDisappear {
-            if !isScreenshotMode {
-                viewModel.onDisappear()
-            }
+            stopCoreIfNeeded()
         }
         .onChange(of: scenePhase) { oldValue, newValue in
             guard !isScreenshotMode else { return }
             switch newValue {
             case .active:
                 currentDate = Date()
-                viewModel.onAppear()
-                applyWindowBackground()
+                startCoreIfAllowed()
                 syncAlertWithState(force: true)
             case .background, .inactive:
-                viewModel.onDisappear()
+                stopCoreIfNeeded()
                 activeAlert = nil
                 showMapPicker = false
             @unknown default:
-                viewModel.onDisappear()
+                stopCoreIfNeeded()
             }
         }
         .onChange(of: viewModel.state) { oldValue, newValue in
