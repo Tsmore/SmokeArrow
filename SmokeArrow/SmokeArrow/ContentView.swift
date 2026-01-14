@@ -18,6 +18,9 @@ struct ContentView: View {
     @State private var showMapPicker = false
     @State private var currentDate = Date()
     @AppStorage("arrowSymbolName") private var arrowSymbolName: String = "location.north.fill"
+    @AppStorage("hasSeenSafetyNotice") private var hasSeenSafetyNotice: Bool = false
+    @State private var isShowingSafetyNotice = false
+    @State private var isCoreRunning = false
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private enum ScreenshotPreset: String {
@@ -167,6 +170,9 @@ struct ContentView: View {
                 .padding(.horizontal, 24)
                 .opacity(isActiveForView ? 1 : 0.35)
 
+                permissionNotice(theme: theme, primaryColor: primaryColor, secondaryColor: secondaryColor)
+                    .padding(.horizontal, 24)
+
                 if let message = inlineStatusMessage {
                     Text(message)
                         .font(.callout)
@@ -205,15 +211,37 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topLeading) {
             topInset(foregroundColor: primaryColor)
                 .safeAreaPadding(.top)
                 .padding(.top, 8)
+        }
+        .overlay(alignment: .topTrailing) {
+            infoButton(foregroundColor: primaryColor)
+                .safeAreaPadding(.top)
+                .padding(.top, 22)
+                .padding(.trailing, 8)
         }
         .overlay(alignment: .bottom) {
             bottomInset()
                 .safeAreaPadding(.bottom)
                 .padding(.bottom, 8)
+        }
+        .sheet(isPresented: $isShowingSafetyNotice) {
+            SafetyNoticeView(
+                requiresAcknowledgement: !hasSeenSafetyNotice,
+                usesLightText: theme.usesLightText,
+                onAcknowledge: {
+                    hasSeenSafetyNotice = true
+                    isShowingSafetyNotice = false
+                    startCoreIfAllowed()
+                },
+                onClose: {
+                    isShowingSafetyNotice = false
+                }
+            )
+            .presentationDetents([.fraction(0.4)])
+            .presentationDragIndicator(.visible)
         }
         .confirmationDialog("地図を選択", isPresented: $showMapPicker, titleVisibility: .visible) {
             Button("Apple マップ") { openMap(.apple) }
@@ -222,23 +250,6 @@ struct ContentView: View {
         }
         .alert(item: $activeAlert) { alert in
             switch alert.kind {
-            case .permissionRequest:
-                return Alert(
-                    title: Text("位置情報を許可してください"),
-                    message: Text("最寄りの喫煙所までの方向と距離を表示するために現在地を使用します。"),
-                    primaryButton: .default(Text("許可する")) { viewModel.requestAuthorization() },
-                    secondaryButton: .cancel(Text("キャンセル"))
-                )
-            case .permissionDenied:
-                return Alert(
-                    title: Text("位置情報が許可されていません"),
-                    message: Text("設定アプリから位置情報の許可を変更できます。"),
-                    primaryButton: .default(Text("設定を開く")) {
-                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                        openURL(url)
-                    },
-                    secondaryButton: .cancel(Text("キャンセル"))
-                )
             case .notFound:
                 return Alert(
                     title: Text("喫煙所が見つかりません"),
@@ -348,11 +359,24 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func infoButton(foregroundColor: Color) -> some View {
+        Button {
+            guard !isScreenshotMode else { return }
+            isShowingSafetyNotice = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(foregroundColor)
+                .padding(10)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("安全に関する注意")
+    }
+
     private var inlineStatusMessage: String? {
         guard !isScreenshotMode else { return nil }
         switch viewModel.state {
-        case .locating:
-            return "測位中…"
         case .lowAccuracy:
             return "測位精度が低い可能性があります"
         default:
@@ -549,10 +573,6 @@ struct ContentView: View {
 
     private func syncAlertWithState(force: Bool = false) {
         let kind: ActiveAlert.Kind? = switch viewModel.state {
-        case .permissionNotDetermined:
-            .permissionRequest
-        case .permissionDenied:
-            .permissionDenied
         case .notFound:
             .notFound
         case .error:
@@ -573,6 +593,25 @@ struct ContentView: View {
         let currentIndex = candidates.firstIndex(of: arrowSymbolName) ?? 0
         let nextIndex = (currentIndex + 1) % candidates.count
         arrowSymbolName = candidates[nextIndex]
+    }
+
+    private func startCoreIfAllowed() {
+        guard !isScreenshotMode else { return }
+        if !hasSeenSafetyNotice {
+            isShowingSafetyNotice = true
+            return
+        }
+        guard !isCoreRunning else { return }
+        isCoreRunning = true
+        viewModel.onAppear()
+        applyWindowBackground()
+    }
+
+    private func stopCoreIfNeeded() {
+        guard !isScreenshotMode else { return }
+        guard isCoreRunning else { return }
+        isCoreRunning = false
+        viewModel.onDisappear()
     }
 
     private var distanceMetersForView: Double? {
@@ -627,6 +666,66 @@ struct ContentView: View {
     private var searchScopeMessageForView: String? {
         if let preset = screenshotPreset { return preset.topSubtitleText }
         return searchScopeMessage
+    }
+
+    @ViewBuilder
+    private func permissionNotice(theme: BackgroundTheme, primaryColor: Color, secondaryColor: Color) -> some View {
+        if isScreenshotMode {
+            EmptyView()
+        } else {
+            switch viewModel.state {
+            case .permissionNotDetermined:
+                VStack(spacing: 12) {
+                    Text("周辺の喫煙所を検索し、方向と距離を表示するために位置情報を使用します。")
+                        .font(.footnote)
+                        .foregroundStyle(secondaryColor)
+                        .multilineTextAlignment(.center)
+                    Button {
+                        viewModel.requestAuthorization()
+                    } label: {
+                        Text("現在位置を許可")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(primaryColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(GlassCapsuleBackground(usesLightText: theme.usesLightText))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+            case .permissionDenied:
+                VStack(spacing: 12) {
+                    Text("位置情報がオフのため周辺検索が使えません")
+                        .font(.footnote)
+                        .foregroundStyle(secondaryColor)
+                        .multilineTextAlignment(.center)
+                    Button {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        openURL(url)
+                    } label: {
+                        Text("設定を開く")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(primaryColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(GlassCapsuleBackground(usesLightText: theme.usesLightText))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+            case .locating:
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .tint(primaryColor)
+                    Text("現在地を取得しています…")
+                        .font(.footnote)
+                        .foregroundStyle(secondaryColor)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            default:
+                EmptyView()
+            }
+        }
     }
 }
 
