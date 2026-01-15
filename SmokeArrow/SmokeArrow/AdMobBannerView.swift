@@ -20,10 +20,8 @@ enum AdMobConfig {
         if ProcessInfo.processInfo.environment["ADMOB_FORCE_PRODUCTION_ADS"] == "1" {
             return false
         }
-        guard let receiptURL = Bundle.main.appStoreReceiptURL else {
-            return true
-        }
-        return receiptURL.lastPathComponent == "sandboxReceipt"
+        // Release / TestFlight では基本的に本番広告を使う（テスト広告は明示的に強制したときのみ）
+        return false
 #endif
     }
 
